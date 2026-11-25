@@ -6,11 +6,15 @@ import type { RootStackParamList } from "../navigation/types";
 import { CITY_POPULATION, runSimulationLocal } from "../simulation/simulationEngine";
 import type { City, ScenarioResult, SimulationResult } from "../simulation/simulationEngine";
 
+import { DISEASE_PROFILES } from "../simulation/diseaseProfiles";
+import type { DiseaseId } from "../simulation/diseaseProfiles";
+
 type Props = NativeStackScreenProps<RootStackParamList, "Simulation">;
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
 export default function SimulationScreen({ navigation, route }: Props) {
   const { missionTitle, cityName, cityId, missionId, hypothesis } = route.params;
+  const [disease, setDisease] = useState<DiseaseId>("covid");
   const [weeks, setWeeks] = useState(52);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState(0);
@@ -36,7 +40,7 @@ export default function SimulationScreen({ navigation, route }: Props) {
     setRunning(true); setProgress(0); setResult(null); setError("");
     try {
       await new Promise<void>(resolve => setTimeout(resolve, 0));
-      const base = { city, weeks, contagionFactor: 0.5, shouldCancel: () => cancelled.current };
+      const base = { city, weeks, disease, contagionFactor: 1, shouldCancel: () => cancelled.current };
       const update = (p: number) => { if (mounted.current) setProgress(p); };
       let data: SimulationResult;
       if (masks) {
@@ -62,7 +66,7 @@ export default function SimulationScreen({ navigation, route }: Props) {
     const last = data ? data.healthy.length - 1 : 0;
     return <View style={styles.card}><Text style={styles.scenarioTitle}>{title}</Text>{data ? <>
       <Text style={styles.description}>População: {fmt(data.total_population)}</Text>
-      {([ ["Saudáveis", data.healthy[last], "#4ADE80"], ["Infectados", data.sick[last], "#FBBF24"], ["Mortos", data.dead[last], "#F87171"], ["Imunes", data.immune[last], "#60A5FA"] ] as const).map(([label, value, color]) => <View key={label} style={styles.stat}><Text style={styles.description}>{label}</Text><Text style={{color, fontWeight:"700"}}>{fmt(value)}</Text></View>)}
+      {([ ["Suscetíveis", data.healthy[last], "#4ADE80"], ["Expostos", data.exposed[last], "#F59E0B"], ["Infectados", data.sick[last], "#FBBF24"], ["Mortos", data.dead[last], "#F87171"], ["Imunes", data.immune[last], "#60A5FA"] ] as const).map(([label, value, color]) => <View key={label} style={styles.stat}><Text style={styles.description}>{label}</Text><Text style={{color, fontWeight:"700"}}>{fmt(value)}</Text></View>)}
       <Text style={styles.description}>Resultados da última semana.</Text>
     </> : <Text style={styles.description}>Aguardando simulação.</Text>}</View>;
   }
@@ -70,8 +74,9 @@ export default function SimulationScreen({ navigation, route }: Props) {
     <Text style={styles.label}>SIMULAÇÃO COMPARATIVA · LOCAL</Text><Text style={styles.title}>{missionTitle}</Text>
     <View style={styles.card}><Text style={styles.cardLabel}>CIDADE SELECIONADA</Text><Text style={styles.cardValue}>{cityName}</Text><Text style={styles.description}>{validCity ? fmt(CITY_POPULATION[city]) + " habitantes por cenário" : "Cidade inválida"}</Text></View>
     <View style={styles.card}><Text style={styles.cardLabel}>HIPÓTESE CIENTÍFICA</Text><Text style={styles.description}>{hypothesis}</Text></View>
+    <View style={styles.card}><Text style={styles.cardLabel}>PERFIL EPIDEMIOLÓGICO</Text>{(Object.keys(DISEASE_PROFILES) as DiseaseId[]).map(id => <TouchableOpacity key={id} disabled={running} onPress={() => {setDisease(id);setResult(null);}} style={[styles.choice,disease===id && styles.selected]}><Text style={styles.buttonText}>{DISEASE_PROFILES[id].name}</Text></TouchableOpacity>)}<Text style={styles.description}>Parâmetros educacionais ilustrativos, não calibrados.</Text></View>
     <View style={styles.card}><Text style={styles.cardLabel}>DURAÇÃO (SEMANAS)</Text><View style={styles.choices}>{[2,10,26,52].map(n => <TouchableOpacity key={n} disabled={running} onPress={() => {setWeeks(n);setResult(null);}} style={[styles.choice, weeks===n && styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View>
-    <Text style={styles.description}>Fator de contágio: 50%. {vaccination ? "Vacinação: cobertura-alvo de 80%, a partir da semana 1." : masks ? "Máscaras versus distanciamento, intensidade máxima do modelo." : "Intervenções conforme a missão."}</Text>
+    <Text style={styles.description}>Transmissão por contato diário: {DISEASE_PROFILES[disease].transmissionPerContact * 100}%. {vaccination ? "Vacinação: cobertura-alvo de 80%, a partir da semana 1." : masks ? "Máscaras versus distanciamento, intensidade máxima do modelo." : "Intervenções conforme a missão."}</Text>
     {free && ([ ["Vacinação",freeVaccine,setFreeVaccine], ["Máscaras",freeMask,setFreeMask], ["Distanciamento",freeDistance,setFreeDistance], ["Lockdown",freeLockdown,setFreeLockdown] ] as const).map(([label,value,set]) => <TouchableOpacity key={label} disabled={running} style={styles.choice} onPress={() => {set(!value);setResult(null);}}><Text style={styles.buttonText}>{value ? "✓ " : "○ "}{label}</Text></TouchableOpacity>)}
     {free && <Text style={styles.description}>Vacina: 80%; demais medidas: intensidade máxima. Parâmetros provisórios de teste.</Text>}
     </View>
