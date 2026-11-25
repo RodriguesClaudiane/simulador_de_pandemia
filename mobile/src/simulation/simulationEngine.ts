@@ -15,6 +15,7 @@ export interface SimulationOptions {
 export interface ScenarioResult {
   healthy:number[]; exposed:number[]; sick:number[]; dead:number[]; immune:number[];
   final_deaths:number; total_population:number;
+  spatial: {width:number; frames:Uint8Array[]};
 }
 export interface SimulationResult {scenario1:ScenarioResult; scenario2:ScenarioResult; elapsedMs:number; seed?:number}
 const S=0,E=1,I=2,R=3,D=4;
@@ -56,7 +57,7 @@ async function simulate(o:SimulationOptions,p:DiseaseProfile,enabled:boolean,bas
       if(day<=o.weeks*7){const list=appointments.get(day); if(list) list.push(j); else appointments.set(day,[j]);}
     }
   }
-  const result:ScenarioResult={healthy:[],exposed:[],sick:[],dead:[],immune:[],final_deaths:0,total_population:n};
+  const result:ScenarioResult={healthy:[],exposed:[],sick:[],dead:[],immune:[],final_deaths:0,total_population:n,spatial:{width,frames:[current.slice()]}};
   const cancel=()=>{if(o.shouldCancel?.()) throw new Error('Simulação cancelada');};
   const yieldUI=()=>new Promise<void>(resolve=>setTimeout(resolve,0));
   let sliceStart=performance.now();
@@ -88,6 +89,7 @@ async function simulate(o:SimulationOptions,p:DiseaseProfile,enabled:boolean,bas
     [current,next]=[next,current];
     if(day%7===0){
       result.healthy.push(counts[S]); result.exposed.push(counts[E]); result.sick.push(counts[I]); result.immune.push(counts[R]); result.dead.push(counts[D]);
+      result.spatial.frames.push(current.slice());
       o.onProgress?.(base+week,o.weeks*2);
     }
     // Yield by elapsed CPU time rather than once per simulated day.
