@@ -47,6 +47,9 @@ async function simulate(o:SimulationOptions,p:DiseaseProfile,enabled:boolean,bas
   const result:ScenarioResult={healthy:[],exposed:[],sick:[],dead:[],immune:[],final_deaths:0,total_population:n};
   const cancel=()=>{if(o.shouldCancel?.()) throw new Error('Simulação cancelada');};
   const yieldUI=()=>new Promise<void>(resolve=>setTimeout(resolve,0));
+  let sliceStart=performance.now();
+  await yieldUI();
+  sliceStart=performance.now();
   for(let day=1;day<=o.weeks*7;day++){
     cancel(); const week=Math.ceil(day/7);
     const v=o.vaccination;
@@ -84,7 +87,11 @@ async function simulate(o:SimulationOptions,p:DiseaseProfile,enabled:boolean,bas
       result.healthy.push(counts[S]); result.exposed.push(counts[E]); result.sick.push(counts[I]); result.immune.push(counts[R]); result.dead.push(counts[D]);
       o.onProgress?.(base+week,o.weeks*2);
     }
-    await yieldUI();
+    // Yield by elapsed CPU time rather than once per simulated day.
+    if(performance.now()-sliceStart>=12 || day%7===0){
+      await yieldUI();
+      sliceStart=performance.now();
+    }
   }
   cancel(); result.final_deaths=result.dead[result.dead.length-1]; return result;
 }
