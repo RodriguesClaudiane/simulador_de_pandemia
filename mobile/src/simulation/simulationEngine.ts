@@ -44,6 +44,18 @@ async function simulate(o:SimulationOptions,p:DiseaseProfile,enabled:boolean,bas
   let current=new Uint8Array(n), next=new Uint8Array(n);
   current[Math.min(n-1,Math.floor(Math.ceil(n/width)/2)*width+Math.floor(width/2))]=I;
   const vaccinatedUntil=new Uint16Array(n);
+  const counts=[n-1,0,1,0,0];
+  const v=o.vaccination;
+  const campaignStart=((v?.week??1)-1)*7+1;
+  const campaignDays=(v?.campaignWeeks??4)*7;
+  // Precompute exactly the same keyed vaccination assignments, in person order.
+  const appointments=new Map<number,number[]>();
+  if(enabled && v?.enabled && campaignStart<=o.weeks*7){
+    for(let j=0;j<n;j++) if(draw(seed,0,j,20)<v.percentage){
+      const day=campaignStart+Math.floor(draw(seed,0,j,21)*campaignDays);
+      if(day<=o.weeks*7){const list=appointments.get(day); if(list) list.push(j); else appointments.set(day,[j]);}
+    }
+  }
   const result:ScenarioResult={healthy:[],exposed:[],sick:[],dead:[],immune:[],final_deaths:0,total_population:n};
   const cancel=()=>{if(o.shouldCancel?.()) throw new Error('Simulação cancelada');};
   const yieldUI=()=>new Promise<void>(resolve=>setTimeout(resolve,0));
@@ -52,16 +64,8 @@ async function simulate(o:SimulationOptions,p:DiseaseProfile,enabled:boolean,bas
   sliceStart=performance.now();
   for(let day=1;day<=o.weeks*7;day++){
     cancel(); const week=Math.ceil(day/7);
-    const v=o.vaccination;
-    const campaignStart=((v?.week??1)-1)*7+1;
-    const campaignDays=(v?.campaignWeeks??4)*7;
-    if(enabled && v?.enabled && day>=campaignStart && day<campaignStart+campaignDays){
-      for(let j=0;j<n;j++){
-        // Assign each targeted person exactly one campaign day, independent of disease state.
-        if(current[j]!==D && draw(seed,0,j,20)<v.percentage && Math.floor(draw(seed,0,j,21)*campaignDays)===day-campaignStart)
-          vaccinatedUntil[j]=day+(v.protectionDays??180);
-      }
-    }
+    const appointmentsToday=appointments.get(day);
+    if(appointmentsToday) for(const j of appointmentsToday) if(current[j]!==D) vaccinatedUntil[j]=day+(v?.protectionDays??180);
     const mask=enabled?active(o.masks,week):0;
     const distance=enabled?active(o.distancing,week):0;
     const lockdown=enabled?active(o.lockdown,week):0;
@@ -75,15 +79,14 @@ async function simulate(o:SimulationOptions,p:DiseaseProfile,enabled:boolean,bas
         for(let dr=-1;dr<=1;dr++) for(let dc=-1;dc<=1;dc++){
           if((dr===0&&dc===0)||row+dr<0||col+dc<0||col+dc>=width) continue;
           const k=(row+dr)*width+col+dc;
-          if(k<n && current[k]===S && next[k]===S && draw(seed,day,j,30+(dr+1)*3+dc+1)<contact*beta*(vaccinatedUntil[k]>day?1-(v?.efficacy??.75):1)) next[k]=E;
+          if(k<n && current[k]===S && next[k]===S && draw(seed,day,j,30+(dr+1)*3+dc+1)<contact*beta*(vaccinatedUntil[k]>day?1-(v?.efficacy??.75):1)) {next[k]=E; counts[S]--; counts[E]++;}
         }
-        if(draw(seed,day,j,1)<1/p.infectiousDays) next[j]=draw(seed,day,j,2)<p.fatalityRisk*(vaccinatedUntil[j]>day?1-(v?.deathProtection??.9):1)?D:R;
-      }else if(state===E){if(draw(seed,day,j,3)<1/p.incubationDays) next[j]=I;}
-      else if(state===R){if(draw(seed,day,j,4)<1/p.immunityDays) next[j]=S;}
+        if(draw(seed,day,j,1)<1/p.infectiousDays) {next[j]=draw(seed,day,j,2)<p.fatalityRisk*(vaccinatedUntil[j]>day?1-(v?.deathProtection??.9):1)?D:R; counts[I]--; counts[next[j]]++;}
+      }else if(state===E){if(draw(seed,day,j,3)<1/p.incubationDays) {next[j]=I; counts[E]--; counts[I]++;}}
+      else if(state===R){if(draw(seed,day,j,4)<1/p.immunityDays) {next[j]=S; counts[R]--; counts[S]++;}}
     }
     [current,next]=[next,current];
     if(day%7===0){
-      const counts=[0,0,0,0,0]; for(let j=0;j<n;j++) counts[current[j]]++;
       result.healthy.push(counts[S]); result.exposed.push(counts[E]); result.sick.push(counts[I]); result.immune.push(counts[R]); result.dead.push(counts[D]);
       o.onProgress?.(base+week,o.weeks*2);
     }
