@@ -41,20 +41,20 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 function active(i: Intervention | undefined, week: number): number {
   return i?.enabled && week >= i.start && week <= i.end ? clamp01(i.intensity) : 0;
 }
-function simulateOne(options: SimulationOptions, interventions: boolean, progressBase: number): ScenarioResult {
+function* simulateOne(options: SimulationOptions, interventions: boolean, progressBase: number): Generator<void, ScenarioResult, void> {
   const count = CITY_POPULATION[options.city];
   const width = Math.ceil(Math.sqrt(count));
   const current = new Uint8Array(count);
   const next = new Uint8Array(count);
-  const center = Math.floor(count / 2);
+  const center = Math.min(count - 1, Math.floor(Math.ceil(count / width) / 2) * width + Math.floor(width / 2));
   current[center] = 1;
   next[center] = 1;
   const result: ScenarioResult = {healthy: [], sick: [], dead: [], immune: [], final_deaths: 0, total_population: count};
   for (let week = 1; week <= options.weeks; week++) {
     if (options.shouldCancel?.()) throw new Error('Simulação cancelada');
     // Mantém a vacinação do modelo original: somente saudáveis, antes da geração.
-    if (interventions && options.vaccination?.enabled && week === options.vaccination.week) {
-      const pct = clamp01(options.vaccination.percentage);
+    if (interventions && options.vaccination?.enabled && week >= options.vaccination.week && week < options.vaccination.week + 4) {
+      const pct = (1 - Math.pow(1 - clamp01(options.vaccination.percentage), 1 / 4)) * 0.75;
       for (let p = 0; p < count; p++) {
         if (current[p] === 0 && Math.random() < pct) {current[p] = 3; next[p] = 3;}
       }
@@ -62,8 +62,8 @@ function simulateOne(options: SimulationOptions, interventions: boolean, progres
     const mask = interventions ? active(options.masks, week) : 0;
     const distance = interventions ? active(options.distancing, week) : 0;
     const lockdown = interventions ? active(options.lockdown, week) : 0;
-    const contagion = clamp01(options.contagionFactor * (1 - mask));
-    const avoidance = clamp01(1 - (1 - distance) * (1 - lockdown));
+    const contagion = clamp01(options.contagionFactor * (1 - 0.18 * mask));
+    const avoidance = Math.max(0.30 * distance, 0.60 * lockdown);
     // Semântica original: processar cada indivíduo da grade na ordem e
     // aplicar contágio à grade NEXT, antes da transição do infectado.
     for (let p = 0; p < count; p++) {
@@ -80,7 +80,7 @@ function simulateOne(options: SimulationOptions, interventions: boolean, progres
             const q = rr * width + cc;
             if (q < 0 || q >= count) continue;
             // O modelo original sorteia contato antes de testar estado do vizinho.
-            if (Math.random() >= avoidance && next[q] === 0 && Math.random() <= contagion) next[q] = 1;
+            if (Math.random() > avoidance && next[q] === 0 && Math.random() <= contagion) next[q] = 1;
           }
         }
         const r = Math.random();
@@ -97,15 +97,30 @@ function simulateOne(options: SimulationOptions, interventions: boolean, progres
     result.healthy.push(healthy); result.sick.push(sick);
     result.dead.push(dead); result.immune.push(immune);
     options.onProgress?.(progressBase + week, options.weeks * 2);
+    yield;
   }
   result.final_deaths = result.dead[result.dead.length - 1] ?? 0;
   return result;
 }
-export function runSimulationLocal(options: SimulationOptions): SimulationResult {
+function validate(options: SimulationOptions): void {
   if (!Number.isInteger(options.weeks) || options.weeks < 1 || options.weeks > 520) throw new Error('weeks deve estar entre 1 e 520');
-  if (!(options.city in CITY_POPULATION)) throw new Error('Cidade inválida');
+  if (!Object.prototype.hasOwnProperty.call(CITY_POPULATION, options.city)) throw new Error('Cidade inválida');
+  if (!Number.isFinite(options.contagionFactor) || options.contagionFactor < 0 || options.contagionFactor > 1) throw new Error("Fator de contágio inválido");
+}
+
+/** Processamento cooperativo na thread JS; não é uma thread nativa. */
+export async function runSimulationLocal(options: SimulationOptions): Promise<SimulationResult> {
+  validate(options);
   const start = performance.now();
-  const scenario1 = simulateOne(options, false, 0);
-  const scenario2 = simulateOne(options, true, options.weeks);
+  async function consume(generator: Generator<void, ScenarioResult, void>): Promise<ScenarioResult> {
+    while (true) {
+      if (options.shouldCancel?.()) throw new Error("Simulação cancelada");
+      const step = generator.next();
+      if (step.done) return step.value;
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+    }
+  }
+  const scenario1 = await consume(simulateOne(options, false, 0));
+  const scenario2 = await consume(simulateOne(options, true, options.weeks));
   return {scenario1, scenario2, elapsedMs: performance.now() - start};
 }
