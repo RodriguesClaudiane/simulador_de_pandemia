@@ -1,8 +1,12 @@
 import React, { useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput } from "react-native";
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import SpatialSimulation from "../components/SpatialSimulation";
 import SimulationCharts from "../components/SimulationCharts";
+import { SafeAreaView } from "react-native-safe-area-context";
+import SegmentedControl from "../components/ui/SegmentedControl";
+import AppButton from "../components/ui/AppButton";
+import { colors, spacing, typography, epidemiologyColors } from "../theme/theme";
 import Header from "../components/Header";
 import type { RootStackParamList } from "../navigation/types";
 import { CITY_POPULATION, runSimulationLocal } from "../simulation/simulationEngine";
@@ -16,6 +20,8 @@ const fmt = (n: number) => n.toLocaleString("pt-BR");
 
 export default function SimulationScreen({ navigation, route }: Props) {
   const { missionTitle, cityName, cityId, missionId, hypothesis } = route.params;
+  const [tab,setTab]=useState<"simulation"|"charts"|"results">("simulation");
+  const [settingsOpen,setSettingsOpen]=useState(false);
   const [disease, setDisease] = useState<DiseaseId>("covid");
   const [seedText,setSeedText]=useState("12345");
   const [coverage,setCoverage]=useState(80);
@@ -50,7 +56,7 @@ export default function SimulationScreen({ navigation, route }: Props) {
   async function start() {
     if (busy.current || !validCity) return;
     busy.current = true; cancelled.current = false;
-    setRunning(true); setProgress(0); setResult(null); setError("");
+    setSettingsOpen(false); setTab("simulation"); setRunning(true); setProgress(0); setResult(null); setError("");
     try {
       await new Promise<void>(resolve => setTimeout(resolve, 0));
       if(!/^\d+$/.test(seedText)||Number(seedText)>4294967295) throw new Error("Semente inválida (0 a 4294967295)");
@@ -81,14 +87,23 @@ export default function SimulationScreen({ navigation, route }: Props) {
     const last = data ? data.healthy.length - 1 : 0;
     return <View style={styles.card}><Text style={styles.scenarioTitle}>{title}</Text>{data ? <>
       <Text style={styles.description}>População: {fmt(data.total_population)}</Text>
-      {([ ["Suscetíveis", data.healthy[last], "#4ADE80"], ["Expostos", data.exposed[last], "#F59E0B"], ["Infectados", data.sick[last], "#FBBF24"], ["Mortos", data.dead[last], "#F87171"], ["Imunes", data.immune[last], "#60A5FA"] ] as const).map(([label, value, color]) => <View key={label} style={styles.stat}><Text style={styles.description}>{label}</Text><Text style={{color, fontWeight:"700"}}>{fmt(value)}</Text></View>)}
+      {([ ["Suscetíveis", data.healthy[last], epidemiologyColors.susceptible], ["Expostos", data.exposed[last], epidemiologyColors.exposed], ["Infectados", data.sick[last], epidemiologyColors.infected], ["Mortos", data.dead[last], epidemiologyColors.deceased], ["Imunes", data.immune[last], epidemiologyColors.recovered] ] as const).map(([label, value, color]) => <View key={label} style={styles.stat}><Text style={styles.description}>{label}</Text><Text style={{color, fontWeight:"700"}}>{fmt(value)}</Text></View>)}
       <Text style={styles.description}>Resultados da última semana.</Text>
     </> : <Text style={styles.description}>Aguardando simulação.</Text>}</View>;
   }
-  return <View style={styles.container}><Header subtitle="SIMULAÇÃO" /><ScrollView contentContainerStyle={styles.content}>
-    <Text style={styles.label}>SIMULAÇÃO COMPARATIVA · LOCAL</Text><Text style={styles.title}>{missionTitle}</Text>
-    <View style={styles.card}><Text style={styles.cardLabel}>CIDADE SELECIONADA</Text><Text style={styles.cardValue}>{cityName}</Text><Text style={styles.description}>{validCity ? fmt(CITY_POPULATION[city]) + " habitantes por cenário" : "Cidade inválida"}</Text></View>
-    <View style={styles.card}><Text style={styles.cardLabel}>HIPÓTESE CIENTÍFICA</Text><Text style={styles.description}>{hypothesis}</Text></View>
+  const labelA = masks ? "Máscaras" : "Sem intervenção";
+  const labelB = masks ? "Distanciamento" : missionId === "sem-intervencao" || (free && !freeVaccine && !freeMask && !freeDistance && !freeLockdown) ? "Sem intervenção (repetição)" : "Com intervenção";
+  return <View style={styles.container}>
+    <Header subtitle="LABORATÓRIO VIRTUAL" />
+    <View style={styles.top}>
+      <View style={styles.stat}><TouchableOpacity accessibilityRole="button" disabled={running} onPress={()=>navigation.goBack()}><Text style={styles.link}>‹ Missões</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" accessibilityState={{expanded:settingsOpen,disabled:running}} disabled={running} onPress={()=>setSettingsOpen(v=>!v)}><Text style={styles.link}>{settingsOpen?"Fechar configurações":"⚙ Configurações"}</Text></TouchableOpacity></View>
+      <Text style={styles.title}>{missionTitle}</Text>
+      <Text style={styles.description}>{cityName} · {validCity ? fmt(CITY_POPULATION[city]) : "Cidade inválida"} hab. · {weeks} semanas</Text>
+      {!settingsOpen && <SegmentedControl options={[{label:"Simulação",value:"simulation"},{label:"Gráficos",value:"charts"},{label:"Resultados",value:"results"}]} value={tab} onChange={setTab}/>}
+    </View>
+    <ScrollView key={settingsOpen?"settings":tab} style={{flex:1}} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    {settingsOpen ? <>
+      <Text style={styles.label}>CONFIGURAÇÕES DO LABORATÓRIO</Text>
     <View style={styles.card}><Text style={styles.cardLabel}>PERFIL EPIDEMIOLÓGICO</Text>{(Object.keys(DISEASE_PROFILES) as DiseaseId[]).map(id => <TouchableOpacity key={id} disabled={running} onPress={() => {setDisease(id);setResult(null);}} style={[styles.choice,disease===id && styles.selected]}><Text style={styles.buttonText}>{DISEASE_PROFILES[id].name}</Text></TouchableOpacity>)}<Text style={styles.description}>Parâmetros educacionais ilustrativos, não calibrados.</Text></View>
     <View style={styles.card}><Text style={styles.cardLabel}>DURAÇÃO (SEMANAS)</Text><View style={styles.choices}>{[2,10,26,52].map(n => <TouchableOpacity key={n} disabled={running} onPress={() => {setWeeks(n);setStartWeek(1);setEndWeek(n);setResult(null);}} style={[styles.choice, weeks===n && styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View>
     <Text style={styles.description}>Transmissão por contato diário: {DISEASE_PROFILES[disease].transmissionPerContact * 100}%. {vaccination ? "Vacinação configurável." : masks ? "Máscaras versus distanciamento." : "Intervenções conforme a missão."}</Text>
@@ -105,17 +120,25 @@ export default function SimulationScreen({ navigation, route }: Props) {
     {(masks||(free&&freeDistance))&&choices("Redução de contatos por distanciamento (%)",distanceEffect,[25,50,75,90],setDistanceEffect)}
     {(free&&freeLockdown)&&choices("Redução de contatos por lockdown (%)",lockEffect,[25,50,80,100],setLockEffect)}
     <Text style={styles.description}>Proteção vacinal: 180 dias. Valores ilustrativos. Imunes na contagem representam recuperação, não cobertura vacinal.</Text></View>
-    <TouchableOpacity disabled={running || !validCity} style={[styles.button, running && {opacity:0.5}]} onPress={start}><Text style={styles.buttonText}>{running ? "Processando..." : "Executar simulação local"}</Text></TouchableOpacity>
-    {running && <View style={styles.card}><ActivityIndicator color="#4ADE80"/><Text style={styles.description}>{Math.round(progress*100)}% concluído</Text><View style={styles.track}><View style={[styles.fill,{width: `${Math.round(progress*100)}%` as `${number}%`}]} /></View><TouchableOpacity style={styles.choice} onPress={() => {cancelled.current=true;}}><Text style={styles.buttonText}>Cancelar</Text></TouchableOpacity></View>}
-    {!!error && <Text style={{color:"#F87171",marginVertical:12}}>{error}</Text>}
-    {result && <View style={styles.card}><Text style={styles.cardLabel}>TEMPO TOTAL DO MOTOR</Text><Text style={styles.cardValue}>{(result.elapsedMs/1000).toFixed(3)} s</Text><Text style={styles.description}>Semente: {result.seed}. Execução local, sem HTTP. Não inclui renderização final.</Text></View>}
-    {scenario(masks ? "CENÁRIO A — MÁSCARAS" : "CENÁRIO A — SEM INTERVENÇÃO",result?.scenario1)}
-    {scenario(masks ? "CENÁRIO B — DISTANCIAMENTO" : missionId === "sem-intervencao" ? "CENÁRIO B — SEM INTERVENÇÃO (REPETIÇÃO)" : "CENÁRIO B — COM INTERVENÇÃO",result?.scenario2)}
-    {result && <SimulationCharts result={result} labelA={masks ? "Máscaras" : "Sem intervenção"} labelB={masks ? "Distanciamento" : missionId === "sem-intervencao" || (free && !freeVaccine && !freeMask && !freeDistance && !freeLockdown) ? "Sem intervenção (repetição)" : "Com intervenção"} />}
-    {result && <SpatialSimulation result={result} labelA={masks ? "Máscaras" : "Sem intervenção"} labelB={masks ? "Distanciamento" : missionId === "sem-intervencao" || (free && !freeVaccine && !freeMask && !freeDistance && !freeLockdown) ? "Sem intervenção (repetição)" : "Com intervenção"} />}
-    <TouchableOpacity disabled={running} style={[styles.button,{backgroundColor:"#30363D"}]} onPress={() => navigation.goBack()}><Text style={styles.buttonText}>Voltar para missões</Text></TouchableOpacity>
-  </ScrollView></View>;
+    </> : <>
+      {tab === "simulation" && <>
+        <View style={styles.card}><Text style={styles.cardLabel}>HIPÓTESE CIENTÍFICA</Text><Text style={styles.description}>{hypothesis}</Text></View>
+        {result ? <SpatialSimulation result={result} labelA={labelA} labelB={labelB}/> : <View style={styles.card}><Text style={styles.scenarioTitle}>Experimento {running?"em andamento":"pronto para configurar"}</Text><Text style={styles.description}>A — {labelA}</Text><Text style={styles.description}>B — {labelB}</Text><Text style={styles.description}>Execute a simulação para visualizar a propagação espacial.</Text></View>}
+      </>}
+      {tab === "charts" && (result ? <SimulationCharts result={result} labelA={labelA} labelB={labelB}/> : <View style={styles.card}><Text style={styles.description}>Execute a simulação para visualizar os gráficos.</Text></View>)}
+      {tab === "results" && <>
+        {result && <View style={styles.card}><Text style={styles.cardLabel}>TEMPO TOTAL DO MOTOR</Text><Text style={styles.cardValue}>{(result.elapsedMs/1000).toFixed(3)} s</Text><Text style={styles.description}>Semente: {result.seed}. Execução local, sem HTTP. Não inclui renderização final.</Text></View>}
+        {scenario(`CENÁRIO A — ${labelA}`,result?.scenario1)}
+        {scenario(`CENÁRIO B — ${labelB}`,result?.scenario2)}
+      </>}
+    </>}
+    </ScrollView>
+    <SafeAreaView edges={["bottom"]} style={styles.bottom}>
+      {!!error && <Text accessibilityRole="alert" style={{color:colors.danger}}>{error}</Text>}
+      {running ? <><Text style={styles.description}>{Math.round(progress*100)}% concluído</Text><View style={styles.track}><View style={[styles.fill,{width:`${Math.round(progress*100)}%` as `${number}%`}]}/></View><AppButton label="Cancelar" variant="secondary" onPress={()=>{cancelled.current=true;}}/></> : <AppButton label={result?"Executar novamente":"Executar simulação local"} disabled={!validCity} onPress={start}/>}
+    </SafeAreaView>
+  </View>;
 }
 const styles = StyleSheet.create({
-  container:{flex:1,backgroundColor:"#0D1117"},content:{padding:20,paddingBottom:50},label:{color:"#4ADE80",fontSize:11,fontWeight:"700",marginBottom:12},title:{color:"#E6EDF3",fontSize:24,fontWeight:"700",marginBottom:24},card:{backgroundColor:"#161B22",borderColor:"#30363D",borderWidth:1,borderRadius:10,padding:18,marginBottom:12},cardLabel:{color:"#7D8590",fontSize:11,marginBottom:8},cardValue:{color:"#E6EDF3",fontSize:18,fontWeight:"600"},description:{color:"#B0BAC4",fontSize:14,lineHeight:22},scenarioTitle:{color:"#4ADE80",fontSize:14,fontWeight:"700",marginBottom:12},button:{backgroundColor:"#238636",padding:17,borderRadius:10,alignItems:"center",marginVertical:12},buttonText:{color:"#FFFFFF",fontWeight:"700"},choices:{flexDirection:"row",gap:8,marginBottom:12},choice:{backgroundColor:"#30363D",padding:12,borderRadius:8,marginTop:6},selected:{backgroundColor:"#238636"},stat:{flexDirection:"row",justifyContent:"space-between",paddingVertical:5},track:{height:8,backgroundColor:"#30363D",borderRadius:4,overflow:"hidden",marginVertical:10},fill:{height:8,backgroundColor:"#4ADE80"}
+  top:{paddingHorizontal:spacing.lg,paddingVertical:spacing.sm,gap:spacing.sm,borderBottomWidth:1,borderBottomColor:colors.border},bottom:{padding:spacing.lg,gap:spacing.sm,borderTopWidth:1,borderTopColor:colors.border,backgroundColor:colors.background},link:{color:colors.accent,fontWeight:"600",paddingVertical:12},container:{flex:1,backgroundColor:colors.background},content:{padding:spacing.lg,paddingBottom:spacing.xl},label:{color:colors.accent,fontSize:11,fontWeight:"700",marginBottom:12},title:{color:colors.text,...typography.section},card:{backgroundColor:colors.surface,borderColor:colors.border,borderWidth:1,borderRadius:10,padding:18,marginBottom:12},cardLabel:{color:colors.muted,fontSize:11,marginBottom:8},cardValue:{color:colors.text,fontSize:18,fontWeight:"600"},description:{color:"#B0BAC4",fontSize:14,lineHeight:22},scenarioTitle:{color:colors.accent,fontSize:14,fontWeight:"700",marginBottom:12},button:{backgroundColor:colors.primary,padding:17,borderRadius:10,alignItems:"center",marginVertical:12},buttonText:{color:colors.onPrimary,fontWeight:"700"},choices:{flexDirection:"row",flexWrap:"wrap",gap:8,marginBottom:12},choice:{backgroundColor:colors.border,padding:12,borderRadius:8,marginTop:6},selected:{backgroundColor:colors.primary},stat:{flexDirection:"row",justifyContent:"space-between",paddingVertical:5},track:{height:8,backgroundColor:colors.border,borderRadius:4,overflow:"hidden",marginVertical:10},fill:{height:8,backgroundColor:colors.accent}
 });
