@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, ActivityIndicator, TextInput } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import SimulationCharts from "../components/SimulationCharts";
 import Header from "../components/Header";
 import type { RootStackParamList } from "../navigation/types";
 import { CITY_POPULATION, runSimulationLocal } from "../simulation/simulationEngine";
@@ -109,6 +110,7 @@ export default function SimulationScreen({ navigation, route }: Props) {
     {result && <View style={styles.card}><Text style={styles.cardLabel}>TEMPO TOTAL DO MOTOR</Text><Text style={styles.cardValue}>{(result.elapsedMs/1000).toFixed(3)} s</Text><Text style={styles.description}>Semente: {result.seed}. Execução local, sem HTTP. Não inclui renderização final.</Text></View>}
     {scenario(masks ? "CENÁRIO A — MÁSCARAS" : "CENÁRIO A — SEM INTERVENÇÃO",result?.scenario1)}
     {scenario(masks ? "CENÁRIO B — DISTANCIAMENTO" : missionId === "sem-intervencao" ? "CENÁRIO B — SEM INTERVENÇÃO (REPETIÇÃO)" : "CENÁRIO B — COM INTERVENÇÃO",result?.scenario2)}
+    {result && <SimulationCharts result={result} labelA={masks ? "Máscaras" : "Sem intervenção"} labelB={masks ? "Distanciamento" : missionId === "sem-intervencao" || (free && !freeVaccine && !freeMask && !freeDistance && !freeLockdown) ? "Sem intervenção (repetição)" : "Com intervenção"} />}
     <TouchableOpacity disabled={running} style={[styles.button,{backgroundColor:"#30363D"}]} onPress={() => navigation.goBack()}><Text style={styles.buttonText}>Voltar para missões</Text></TouchableOpacity>
   </ScrollView></View>;
 }
