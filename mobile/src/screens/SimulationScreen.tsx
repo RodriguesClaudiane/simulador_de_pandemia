@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import SettingsPanel from "../components/SettingsPanel";
 import SpatialSimulation from "../components/SpatialSimulation";
 import SimulationCharts from "../components/SimulationCharts";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -11,7 +12,6 @@ import Header from "../components/Header";
 import type { RootStackParamList } from "../navigation/types";
 import { CITY_POPULATION, runSimulationLocal } from "../simulation/simulationEngine";
 import type { City, ScenarioResult, SimulationResult } from "../simulation/simulationEngine";
-
 import { DISEASE_PROFILES } from "../simulation/diseaseProfiles";
 import type { DiseaseId } from "../simulation/diseaseProfiles";
 
@@ -91,36 +91,18 @@ export default function SimulationScreen({ navigation, route }: Props) {
       <Text style={styles.description}>Resultados da última semana.</Text>
     </> : <Text style={styles.description}>Aguardando simulação.</Text>}</View>;
   }
-  const labelA = masks ? "Máscaras" : "Sem intervenção";
+const labelA = masks ? "Máscaras" : "Sem intervenção";
   const labelB = masks ? "Distanciamento" : missionId === "sem-intervencao" || (free && !freeVaccine && !freeMask && !freeDistance && !freeLockdown) ? "Sem intervenção (repetição)" : "Com intervenção";
   return <View style={styles.container}>
     <Header subtitle="LABORATÓRIO VIRTUAL" />
     <View style={styles.top}>
-      <View style={styles.stat}><TouchableOpacity accessibilityRole="button" disabled={running} onPress={()=>navigation.goBack()}><Text style={styles.link}>‹ Missões</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" accessibilityState={{expanded:settingsOpen,disabled:running}} disabled={running} onPress={()=>setSettingsOpen(v=>!v)}><Text style={styles.link}>{settingsOpen?"Fechar configurações":"⚙ Configurações"}</Text></TouchableOpacity></View>
+      <View style={styles.stat}><TouchableOpacity accessibilityRole="button" disabled={running} onPress={()=>navigation.goBack()}><Text style={styles.link}>‹ Missões</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" accessibilityState={{expanded:settingsOpen,disabled:running}} disabled={running} onPress={()=>setSettingsOpen(v=>!v)}><Text style={styles.link}>{"⚙ Configurações"}</Text></TouchableOpacity></View>
       <Text style={styles.title}>{missionTitle}</Text>
       <Text style={styles.description}>{cityName} · {validCity ? fmt(CITY_POPULATION[city]) : "Cidade inválida"} hab. · {weeks} semanas</Text>
-      {!settingsOpen && <SegmentedControl options={[{label:"Simulação",value:"simulation"},{label:"Gráficos",value:"charts"},{label:"Resultados",value:"results"}]} value={tab} onChange={setTab}/>}
+      {<SegmentedControl options={[{label:"Simulação",value:"simulation"},{label:"Gráficos",value:"charts"},{label:"Resultados",value:"results"}]} value={tab} onChange={setTab}/>}
     </View>
-    <ScrollView key={settingsOpen?"settings":tab} style={{flex:1}} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-    {settingsOpen ? <>
-      <Text style={styles.label}>CONFIGURAÇÕES DO LABORATÓRIO</Text>
-    <View style={styles.card}><Text style={styles.cardLabel}>PERFIL EPIDEMIOLÓGICO</Text>{(Object.keys(DISEASE_PROFILES) as DiseaseId[]).map(id => <TouchableOpacity key={id} disabled={running} onPress={() => {setDisease(id);setResult(null);}} style={[styles.choice,disease===id && styles.selected]}><Text style={styles.buttonText}>{DISEASE_PROFILES[id].name}</Text></TouchableOpacity>)}<Text style={styles.description}>Parâmetros educacionais ilustrativos, não calibrados.</Text></View>
-    <View style={styles.card}><Text style={styles.cardLabel}>DURAÇÃO (SEMANAS)</Text><View style={styles.choices}>{[2,10,26,52].map(n => <TouchableOpacity key={n} disabled={running} onPress={() => {setWeeks(n);setStartWeek(1);setEndWeek(n);setResult(null);}} style={[styles.choice, weeks===n && styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View>
-    <Text style={styles.description}>Transmissão por contato diário: {DISEASE_PROFILES[disease].transmissionPerContact * 100}%. {vaccination ? "Vacinação configurável." : masks ? "Máscaras versus distanciamento." : "Intervenções conforme a missão."}</Text>
-    {free && ([ ["Vacinação",freeVaccine,setFreeVaccine], ["Máscaras",freeMask,setFreeMask], ["Distanciamento",freeDistance,setFreeDistance], ["Lockdown",freeLockdown,setFreeLockdown] ] as const).map(([label,value,set]) => <TouchableOpacity key={label} disabled={running} style={styles.choice} onPress={() => {set(!value);setResult(null);}}><Text style={styles.buttonText}>{value ? "✓ " : "○ "}{label}</Text></TouchableOpacity>)}
-    {free && <Text style={styles.description}>Parâmetros educacionais, não calibrados.</Text>}
-    </View>
-    <View style={styles.card}><Text style={styles.cardLabel}>CONFIGURAÇÃO DO EXPERIMENTO</Text>
-    <Text style={styles.description}>Semente aleatória (mesma semente e parâmetros reproduzem o resultado)</Text>
-    <TextInput editable={!running} keyboardType="numeric" value={seedText} onChangeText={v=>{setSeedText(v);setResult(null);}} style={{color:"#FFFFFF",backgroundColor:"#30363D",padding:12,borderRadius:8}}/>
-    {(vaccination||masks||free)&&<>{choices("Semana inicial",startWeek,[1,2,4,10].filter(n=>n<=weeks),setStartWeek)}</>}
-    {(vaccination||(free&&freeVaccine))&&<>{choices("Cobertura (%)",coverage,[0,25,50,80,100],setCoverage)}{choices("Eficácia contra infecção (%)",efficacy,[25,50,75,90],setEfficacy)}{choices("Proteção contra óbito (%)",deathProtection,[0,50,75,90],setDeathProtection)}{choices("Campanha (semanas)",campaign,[1,2,4,8],setCampaign)}</>}
-    {(masks||(free&&(freeMask||freeDistance||freeLockdown)))&&<>{choices("Adesão/intensidade (%)",intensity,[25,50,75,100],setIntensity)}{choices("Semana final (limitada à duração)",Math.min(endWeek,weeks),[2,10,26,52].filter(n=>n<=weeks),setEndWeek)}</>}
-    {(masks||(free&&freeMask))&&choices("Eficácia das máscaras (%)",maskEffect,[25,50,75,90],setMaskEffect)}
-    {(masks||(free&&freeDistance))&&choices("Redução de contatos por distanciamento (%)",distanceEffect,[25,50,75,90],setDistanceEffect)}
-    {(free&&freeLockdown)&&choices("Redução de contatos por lockdown (%)",lockEffect,[25,50,80,100],setLockEffect)}
-    <Text style={styles.description}>Proteção vacinal: 180 dias. Valores ilustrativos. Imunes na contagem representam recuperação, não cobertura vacinal.</Text></View>
-    </> : <>
+    <ScrollView key={tab} style={{flex:1}} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+
       {tab === "simulation" && <>
         <View style={styles.card}><Text style={styles.cardLabel}>HIPÓTESE CIENTÍFICA</Text><Text style={styles.description}>{hypothesis}</Text></View>
         {result ? <SpatialSimulation result={result} labelA={labelA} labelB={labelB}/> : <View style={styles.card}><Text style={styles.scenarioTitle}>Experimento {running?"em andamento":"pronto para configurar"}</Text><Text style={styles.description}>A — {labelA}</Text><Text style={styles.description}>B — {labelB}</Text><Text style={styles.description}>Execute a simulação para visualizar a propagação espacial.</Text></View>}
@@ -131,8 +113,26 @@ export default function SimulationScreen({ navigation, route }: Props) {
         {scenario(`CENÁRIO A — ${labelA}`,result?.scenario1)}
         {scenario(`CENÁRIO B — ${labelB}`,result?.scenario2)}
       </>}
-    </>}
     </ScrollView>
+    <SettingsPanel visible={settingsOpen} onClose={()=>setSettingsOpen(false)} basic={<>
+    <View style={styles.card}><Text style={styles.cardLabel}>PERFIL EPIDEMIOLÓGICO</Text>{(Object.keys(DISEASE_PROFILES) as DiseaseId[]).map(id => <TouchableOpacity key={id} disabled={running} onPress={() => {setDisease(id);setResult(null);}} style={[styles.choice,disease===id && styles.selected]}><Text style={styles.buttonText}>{DISEASE_PROFILES[id].name}</Text></TouchableOpacity>)}<Text style={styles.description}>Parâmetros educacionais ilustrativos, não calibrados.</Text></View>
+    <View style={styles.card}><Text style={styles.cardLabel}>DURAÇÃO (SEMANAS)</Text><View style={styles.choices}>{[2,10,26,52].map(n => <TouchableOpacity key={n} disabled={running} onPress={() => {setWeeks(n);setStartWeek(1);setEndWeek(n);setResult(null);}} style={[styles.choice, weeks===n && styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View>
+    <Text style={styles.description}>Transmissão por contato diário: {DISEASE_PROFILES[disease].transmissionPerContact * 100}%. {vaccination ? "Vacinação configurável." : masks ? "Máscaras versus distanciamento." : "Intervenções conforme a missão."}</Text>
+    {free && ([ ["Vacinação",freeVaccine,setFreeVaccine], ["Máscaras",freeMask,setFreeMask], ["Distanciamento",freeDistance,setFreeDistance], ["Lockdown",freeLockdown,setFreeLockdown] ] as const).map(([label,value,set]) => <TouchableOpacity key={label} disabled={running} style={styles.choice} onPress={() => {set(!value);setResult(null);}}><Text style={styles.buttonText}>{value ? "✓ " : "○ "}{label}</Text></TouchableOpacity>)}
+    {free && <Text style={styles.description}>Parâmetros educacionais, não calibrados.</Text>}
+    </View>
+    </>} advanced={<>
+    <View style={styles.card}><Text style={styles.cardLabel}>CONFIGURAÇÃO DO EXPERIMENTO</Text>
+    <Text style={styles.description}>Semente aleatória (mesma semente e parâmetros reproduzem o resultado)</Text>
+    <TextInput editable={!running} keyboardType="numeric" value={seedText} onChangeText={v=>{setSeedText(v);setResult(null);}} style={{color:"#FFFFFF",backgroundColor:"#30363D",padding:12,borderRadius:8}}/>
+    {(vaccination||masks||free)&&<>{choices("Semana inicial",startWeek,[1,2,4,10].filter(n=>n<=weeks),setStartWeek)}</>}
+    {(vaccination||(free&&freeVaccine))&&<>{choices("Cobertura (%)",coverage,[0,25,50,80,100],setCoverage)}{choices("Eficácia contra infecção (%)",efficacy,[25,50,75,90],setEfficacy)}{choices("Proteção contra óbito (%)",deathProtection,[0,50,75,90],setDeathProtection)}{choices("Campanha (semanas)",campaign,[1,2,4,8],setCampaign)}</>}
+    {(masks||(free&&(freeMask||freeDistance||freeLockdown)))&&<>{choices("Adesão/intensidade (%)",intensity,[25,50,75,100],setIntensity)}{choices("Semana final (limitada à duração)",Math.min(endWeek,weeks),[2,10,26,52].filter(n=>n<=weeks),setEndWeek)}</>}
+    {(masks||(free&&freeMask))&&choices("Eficácia das máscaras (%)",maskEffect,[25,50,75,90],setMaskEffect)}
+    {(masks||(free&&freeDistance))&&choices("Redução de contatos por distanciamento (%)",distanceEffect,[25,50,75,90],setDistanceEffect)}
+    {(free&&freeLockdown)&&choices("Redução de contatos por lockdown (%)",lockEffect,[25,50,80,100],setLockEffect)}
+    <Text style={styles.description}>Proteção vacinal: 180 dias. Valores ilustrativos. Imunes na contagem representam recuperação, não cobertura vacinal.</Text></View>
+    </>}/>
     <SafeAreaView edges={["bottom"]} style={styles.bottom}>
       {!!error && <Text accessibilityRole="alert" style={{color:colors.danger}}>{error}</Text>}
       {running ? <><Text style={styles.description}>{Math.round(progress*100)}% concluído</Text><View style={styles.track}><View style={[styles.fill,{width:`${Math.round(progress*100)}%` as `${number}%`}]}/></View><AppButton label="Cancelar" variant="secondary" onPress={()=>{cancelled.current=true;}}/></> : <AppButton label={result?"Executar novamente":"Executar simulação local"} disabled={!validCity} onPress={start}/>}
