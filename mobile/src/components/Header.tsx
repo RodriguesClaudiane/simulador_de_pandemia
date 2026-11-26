@@ -1,72 +1,36 @@
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTheme } from '../theme/ThemeProvider';
+import ThemeSelector from './themeSelect';
 
-import React from "react";
-import { View, Text, StyleSheet } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-
-type HeaderProps = {
-  subtitle?: string;
-};
-
-export default function Header({
-  subtitle = "SIMULADOR DE PANDEMIAS",
-}: HeaderProps) {
+type HeaderProps = { subtitle?: string };
+export default function Header({ subtitle = 'SIMULADOR DE PANDEMIAS' }: HeaderProps) {
+  const { theme } = useTheme();
+  const { colors: c } = theme;
   return (
-    <SafeAreaView edges={["top"]} style={styles.safeArea}>
-      <View style={styles.header}>
-        <View style={styles.brand}>
-          <View style={styles.bars}>
-            <View style={[styles.bar, { height: 8 }]} />
-            <View style={[styles.bar, { height: 14 }]} />
-            <View style={[styles.bar, { height: 10 }]} />
+    <SafeAreaView edges={['top']} style={{ backgroundColor: c.background }}>
+      <View style={[styles.header, { borderBottomColor: c.border }]}>
+        <View style={styles.identity}>
+          <View style={styles.brand}>
+            <View style={styles.bars} accessible={false}>
+              {[8, 14, 10].map((height, index) => <View key={index} style={[styles.bar, { height, backgroundColor: c.accent }]} />)}
+            </View>
+            <Text accessibilityRole="header" style={[styles.logo, { color: c.text }]}>PeriferiaLab</Text>
           </View>
-          <Text style={styles.logo}>PeriferiaLab</Text>
+          <Text style={[styles.subtitle, { color: c.muted }]}>{subtitle}</Text>
         </View>
-
-        <Text style={styles.subtitle}>{subtitle}</Text>
+        <ThemeSelector />
       </View>
     </SafeAreaView>
   );
 }
-
 const styles = StyleSheet.create({
-  safeArea: {
-    backgroundColor: "#0D1117",
-  },
-  header: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: "#30363D",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  brand: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  bars: {
-    flexDirection: "row",
-    alignItems: "flex-end",
-    gap: 2,
-  },
-  bar: {
-    width: 4,
-    backgroundColor: "#4ADE80",
-    borderRadius: 1,
-  },
-  logo: {
-    color: "#E6EDF3",
-    fontSize: 18,
-    fontWeight: "700",
-  },
-  subtitle: {
-    color: "#7D8590",
-    fontSize: 9,
-    letterSpacing: 0.5,
-    flexShrink: 1,
-    textAlign: "right",
-    marginLeft: 12,
-  },
+  header: { paddingHorizontal: 16, paddingVertical: 6, borderBottomWidth: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  identity: { flex: 1, gap: 2 },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  bars: { flexDirection: 'row', alignItems: 'flex-end', gap: 2 },
+  bar: { width: 4, borderRadius: 1 },
+  logo: { fontSize: 18, fontWeight: '700', flexShrink: 1 },
+  subtitle: { fontSize: 10, letterSpacing: 0.5 },
 });

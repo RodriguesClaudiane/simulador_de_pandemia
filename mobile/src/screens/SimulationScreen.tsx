@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from "react";
-import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput, StatusBar } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import SettingsPanel from "../components/SettingsPanel";
 import SpatialSimulation from "../components/SpatialSimulation";
@@ -8,7 +8,8 @@ import SimulationCharts from "../components/SimulationCharts";
 import { SafeAreaView } from "react-native-safe-area-context";
 import SegmentedControl from "../components/ui/SegmentedControl";
 import AppButton from "../components/ui/AppButton";
-import { colors, spacing, typography } from "../theme/theme";
+import type { Theme } from "../theme/theme";
+import { useTheme } from "../theme/ThemeProvider";
 import Header from "../components/Header";
 import type { RootStackParamList } from "../navigation/types";
 import { CITY_POPULATION, runSimulationLocal } from "../simulation/simulationEngine";
@@ -20,6 +21,9 @@ type Props = NativeStackScreenProps<RootStackParamList, "Simulation">;
 const fmt = (n: number) => n.toLocaleString("pt-BR");
 
 export default function SimulationScreen({ navigation, route }: Props) {
+  const { theme, resolvedMode } = useTheme();
+  const { colors } = theme;
+  const styles = useMemo(() => createStyles(theme), [theme]);
   const { missionTitle, cityName, cityId, missionId, hypothesis } = route.params;
   const [tab,setTab]=useState<"simulation"|"charts"|"results">("simulation");
   const [settingsOpen,setSettingsOpen]=useState(false);
@@ -83,10 +87,11 @@ export default function SimulationScreen({ navigation, route }: Props) {
       if (mounted.current) setError(cancelled.current ? "Simulação cancelada." : e instanceof Error ? e.message : String(e));
     } finally { busy.current = false; if (mounted.current) setRunning(false); }
   }
-  function choices(label:string,value:number,values:number[],set:(n:number)=>void){return <View><Text style={styles.description}>{label}: {value}</Text><View style={[styles.choices,{flexWrap:"wrap"}]}>{values.map(n=><TouchableOpacity key={n} disabled={running} onPress={()=>{set(n);setResult(null);}} style={[styles.choice,n===value&&styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View></View>;}
+  function choices(label:string,value:number,values:number[],set:(n:number)=>void){return <View><Text style={styles.description}>{label}: {value}</Text><View style={[styles.choices,{flexWrap:"wrap"}]}>{values.map(n=><TouchableOpacity key={n} disabled={running} onPress={()=>{set(n);setResult(null);}} accessibilityRole="button" accessibilityState={{selected:n===value,disabled:running}} style={[styles.choice,n===value&&styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View></View>;}
   const labelA = masks ? "Máscaras" : "Sem intervenção";
   const labelB = masks ? "Distanciamento" : missionId === "sem-intervencao" || (free && !freeVaccine && !freeMask && !freeDistance && !freeLockdown) ? "Sem intervenção (repetição)" : "Com intervenção";
   return <View style={styles.container}>
+    <StatusBar barStyle={resolvedMode === "dark" ? "light-content" : "dark-content"} />
     <Header subtitle="LABORATÓRIO VIRTUAL" />
     <View style={styles.top}>
       <View style={styles.stat}><TouchableOpacity accessibilityRole="button" disabled={running} onPress={()=>navigation.goBack()}><Text style={styles.link}>‹ Missões</Text></TouchableOpacity><TouchableOpacity accessibilityRole="button" accessibilityState={{expanded:settingsOpen,disabled:running}} disabled={running} onPress={()=>setSettingsOpen(v=>!v)}><Text style={styles.link}>{"⚙ Configurações"}</Text></TouchableOpacity></View>
@@ -104,16 +109,16 @@ export default function SimulationScreen({ navigation, route }: Props) {
       {tab === "results" && (result ? <SimulationResults result={result} labelA={labelA} labelB={labelB}/> : <View style={styles.card}><Text style={styles.description}>Execute a simulação para visualizar os resultados.</Text></View>)}
     </ScrollView>
     <SettingsPanel visible={settingsOpen} onClose={()=>setSettingsOpen(false)} basic={<>
-    <View style={styles.card}><Text style={styles.cardLabel}>PERFIL EPIDEMIOLÓGICO</Text>{(Object.keys(DISEASE_PROFILES) as DiseaseId[]).map(id => <TouchableOpacity key={id} disabled={running} onPress={() => {setDisease(id);setResult(null);}} style={[styles.choice,disease===id && styles.selected]}><Text style={styles.buttonText}>{DISEASE_PROFILES[id].name}</Text></TouchableOpacity>)}<Text style={styles.description}>Parâmetros educacionais ilustrativos, não calibrados.</Text></View>
-    <View style={styles.card}><Text style={styles.cardLabel}>DURAÇÃO (SEMANAS)</Text><View style={styles.choices}>{[2,10,26,52].map(n => <TouchableOpacity key={n} disabled={running} onPress={() => {setWeeks(n);setStartWeek(1);setEndWeek(n);setResult(null);}} style={[styles.choice, weeks===n && styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View>
+    <View style={styles.card}><Text style={styles.cardLabel}>PERFIL EPIDEMIOLÓGICO</Text>{(Object.keys(DISEASE_PROFILES) as DiseaseId[]).map(id => <TouchableOpacity key={id} disabled={running} onPress={() => {setDisease(id);setResult(null);}} accessibilityRole="button" accessibilityState={{selected:disease===id,disabled:running}} style={[styles.choice,disease===id && styles.selected]}><Text style={styles.buttonText}>{DISEASE_PROFILES[id].name}</Text></TouchableOpacity>)}<Text style={styles.description}>Parâmetros educacionais ilustrativos, não calibrados.</Text></View>
+    <View style={styles.card}><Text style={styles.cardLabel}>DURAÇÃO (SEMANAS)</Text><View style={styles.choices}>{[2,10,26,52].map(n => <TouchableOpacity key={n} disabled={running} onPress={() => {setWeeks(n);setStartWeek(1);setEndWeek(n);setResult(null);}} accessibilityRole="button" accessibilityState={{selected:weeks===n,disabled:running}} style={[styles.choice, weeks===n && styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View>
     <Text style={styles.description}>Transmissão por contato diário: {DISEASE_PROFILES[disease].transmissionPerContact * 100}%. {vaccination ? "Vacinação configurável." : masks ? "Máscaras versus distanciamento." : "Intervenções conforme a missão."}</Text>
-    {free && ([ ["Vacinação",freeVaccine,setFreeVaccine], ["Máscaras",freeMask,setFreeMask], ["Distanciamento",freeDistance,setFreeDistance], ["Lockdown",freeLockdown,setFreeLockdown] ] as const).map(([label,value,set]) => <TouchableOpacity key={label} disabled={running} style={styles.choice} onPress={() => {set(!value);setResult(null);}}><Text style={styles.buttonText}>{value ? "✓ " : "○ "}{label}</Text></TouchableOpacity>)}
+    {free && ([ ["Vacinação",freeVaccine,setFreeVaccine], ["Máscaras",freeMask,setFreeMask], ["Distanciamento",freeDistance,setFreeDistance], ["Lockdown",freeLockdown,setFreeLockdown] ] as const).map(([label,value,set]) => <TouchableOpacity key={label} disabled={running} accessibilityRole="button" accessibilityState={{selected:value,disabled:running}} style={[styles.choice,value&&styles.selected]} onPress={() => {set(!value);setResult(null);}}><Text style={styles.buttonText}>{value ? "✓ " : "○ "}{label}</Text></TouchableOpacity>)}
     {free && <Text style={styles.description}>Parâmetros educacionais, não calibrados.</Text>}
     </View>
     </>} advanced={<>
     <View style={styles.card}><Text style={styles.cardLabel}>CONFIGURAÇÃO DO EXPERIMENTO</Text>
     <Text style={styles.description}>Semente aleatória (mesma semente e parâmetros reproduzem o resultado)</Text>
-    <TextInput editable={!running} keyboardType="numeric" value={seedText} onChangeText={v=>{setSeedText(v);setResult(null);}} style={{color:"#FFFFFF",backgroundColor:"#30363D",padding:12,borderRadius:8}}/>
+    <TextInput editable={!running} keyboardType="numeric" value={seedText} onChangeText={v=>{setSeedText(v);setResult(null);}} accessibilityLabel="Semente aleatória" style={styles.seedInput}/>
     {(vaccination||masks||free)&&<>{choices("Semana inicial",startWeek,[1,2,4,10].filter(n=>n<=weeks),setStartWeek)}</>}
     {(vaccination||(free&&freeVaccine))&&<>{choices("Cobertura (%)",coverage,[0,25,50,80,100],setCoverage)}{choices("Eficácia contra infecção (%)",efficacy,[25,50,75,90],setEfficacy)}{choices("Proteção contra óbito (%)",deathProtection,[0,50,75,90],setDeathProtection)}{choices("Campanha (semanas)",campaign,[1,2,4,8],setCampaign)}</>}
     {(masks||(free&&(freeMask||freeDistance||freeLockdown)))&&<>{choices("Adesão/intensidade (%)",intensity,[25,50,75,100],setIntensity)}{choices("Semana final (limitada à duração)",Math.min(endWeek,weeks),[2,10,26,52].filter(n=>n<=weeks),setEndWeek)}</>}
@@ -128,6 +133,9 @@ export default function SimulationScreen({ navigation, route }: Props) {
     </SafeAreaView>
   </View>;
 }
-const styles = StyleSheet.create({
-  top:{paddingHorizontal:spacing.lg,paddingVertical:spacing.sm,gap:spacing.sm,borderBottomWidth:1,borderBottomColor:colors.border},bottom:{padding:spacing.lg,gap:spacing.sm,borderTopWidth:1,borderTopColor:colors.border,backgroundColor:colors.background},link:{color:colors.accent,fontWeight:"600",paddingVertical:12},container:{flex:1,backgroundColor:colors.background},content:{padding:spacing.lg,paddingBottom:spacing.xl},label:{color:colors.accent,fontSize:11,fontWeight:"700",marginBottom:12},title:{color:colors.text,...typography.section},card:{backgroundColor:colors.surface,borderColor:colors.border,borderWidth:1,borderRadius:10,padding:18,marginBottom:12},cardLabel:{color:colors.muted,fontSize:11,marginBottom:8},cardValue:{color:colors.text,fontSize:18,fontWeight:"600"},description:{color:"#B0BAC4",fontSize:14,lineHeight:22},scenarioTitle:{color:colors.accent,fontSize:14,fontWeight:"700",marginBottom:12},button:{backgroundColor:colors.primary,padding:17,borderRadius:10,alignItems:"center",marginVertical:12},buttonText:{color:colors.onPrimary,fontWeight:"700"},choices:{flexDirection:"row",flexWrap:"wrap",gap:8,marginBottom:12},choice:{backgroundColor:colors.border,padding:12,borderRadius:8,marginTop:6},selected:{backgroundColor:colors.primary},stat:{flexDirection:"row",justifyContent:"space-between",paddingVertical:5},track:{height:8,backgroundColor:colors.border,borderRadius:4,overflow:"hidden",marginVertical:10},fill:{height:8,backgroundColor:colors.accent}
+function createStyles(theme: Theme) {
+  const { colors, spacing, typography, radius, layout } = theme;
+  return StyleSheet.create({
+  top:{paddingHorizontal:spacing.md,paddingVertical:spacing.xs,gap:spacing.xs,borderBottomWidth:1,borderBottomColor:colors.border},bottom:{padding:spacing.md,gap:spacing.xs,borderTopWidth:1,borderTopColor:colors.border,backgroundColor:colors.surface},link:{color:colors.accent,fontWeight:"600",minHeight:48,textAlignVertical:"center"},container:{flex:1,backgroundColor:colors.background},content:{padding:spacing.md,paddingBottom:spacing.lg},label:{color:colors.accent,fontSize:11,fontWeight:"700",marginBottom:12},title:{color:colors.text,...typography.section,fontSize:16,lineHeight:22},card:{backgroundColor:colors.surface,borderColor:colors.border,borderWidth:1,borderRadius:10,padding:18,marginBottom:12},cardLabel:{color:colors.muted,fontSize:11,marginBottom:8},cardValue:{color:colors.text,fontSize:18,fontWeight:"600"},description:{color:colors.muted,fontSize:14,lineHeight:22},scenarioTitle:{color:colors.accent,fontSize:14,fontWeight:"700",marginBottom:12},button:{backgroundColor:colors.primary,padding:17,borderRadius:10,alignItems:"center",marginVertical:12},buttonText:{color:colors.text,fontWeight:"700"},choices:{flexDirection:"row",flexWrap:"wrap",gap:8,marginBottom:12},choice:{backgroundColor:colors.control,borderWidth:1,borderColor:colors.controlBorder,minHeight:layout.minTouchTarget,justifyContent:"center",padding:12,borderRadius:8,marginTop:6},selected:{backgroundColor:colors.selectedSurface,borderColor:colors.accent},stat:{flexDirection:"row",justifyContent:"space-between",alignItems:"center",paddingVertical:0},track:{height:8,backgroundColor:colors.border,borderRadius:4,overflow:"hidden",marginVertical:10},fill:{height:8,backgroundColor:colors.accent},seedInput:{color:colors.text,backgroundColor:colors.control,padding:12,borderRadius:radius.md,borderWidth:1,borderColor:colors.controlBorder,minHeight:layout.minTouchTarget}
 });
+}

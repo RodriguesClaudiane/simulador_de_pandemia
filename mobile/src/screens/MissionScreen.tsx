@@ -8,7 +8,8 @@ import AppButton from '../components/ui/AppButton';
 import AppCard from '../components/ui/AppCard';
 import AppText from '../components/ui/AppText';
 import SectionHeader from '../components/ui/SectionHeader';
-import { colors, spacing, radius, layout } from '../theme/theme';
+import type { Theme } from '../theme/theme';
+import { useTheme } from '../theme/ThemeProvider';
 type Props = NativeStackScreenProps<RootStackParamList, 'Mission'>;
 const missions = [
   {
@@ -19,7 +20,7 @@ const missions = [
     heading: "Uma doença chegou à cidade. O que você faz?",
     body: "Um estudante da sua escola chegou gripado. Nos próximos dias, mais colegas começam a faltar. Você é o responsável pela saúde da cidade — decide: vacinar, exigir máscaras, pedir distanciamento... ou não fazer nada?",
     hypothesis: "Cidades que vacinam a população têm menos mortes do que cidades que não vacinam, mesmo com o mesmo vírus.",
-    color: colors.accent,
+    tone: 'accent',
   },
   {
     id: "mascara",
@@ -29,7 +30,7 @@ const missions = [
     heading: "O prefeito te ligou. Você tem verba para uma só medida.",
     body: "Há casos confirmados na cidade. O orçamento é limitado — só dá para uma medida. O que salva mais vidas: obrigar máscara em lugares públicos ou pedir que as pessoas fiquem em casa?",
     hypothesis: "O distanciamento social evita mais mortes do que o uso de máscara quando apenas uma dessas medidas é adotada.",
-    color: colors.warning,
+    tone: 'warning',
   },
   {
     id: "sem-intervencao",
@@ -39,7 +40,7 @@ const missions = [
     heading: "O pior cenário. Sem vacina, sem máscara, sem nada.",
     body: "Nenhuma vacina, máscara, distanciamento ou lockdown. O vírus se espalha livremente. Execute a simulação e veja os resultados simulados.",
     hypothesis: "Sem nenhuma medida de proteção, o número de infectados e de mortes tende a ser maior do que em um cenário com medidas de proteção.",
-    color: colors.danger,
+    tone: 'danger',
   },
   {
     id: "livre",
@@ -49,7 +50,7 @@ const missions = [
     heading: "Agora você é o cientista. O que você quer descobrir?",
     body: "Monte os dois cenários do zero. Escolha a taxa de transmissão, as medidas e a cidade. Antes de rodar, escreva o que você acha que vai acontecer — isso é uma hipótese científica.",
     hypothesis: "",
-    color: colors.info,
+    tone: 'info',
   },
 ] as const;
 
@@ -62,6 +63,9 @@ const cities = [
 ] as const;
 
 export default function MissionScreen({ navigation }: Props) {
+  const { theme, resolvedMode } = useTheme();
+  const { colors } = theme;
+  const styles = React.useMemo(() => createStyles(theme), [theme]);
   const [selectedMission, setSelectedMission] = useState("vacina");
   const [selectedCity, setSelectedCity] = useState("igarassu");
   const [customHypothesis, setCustomHypothesis] = useState("");
@@ -94,13 +98,13 @@ export default function MissionScreen({ navigation }: Props) {
     hypothesis:
       selectedMission === "livre"
         ? customHypothesis.trim()
-             : mission.hypothesis,
+        : mission.hypothesis,
   });
 }
 
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle={resolvedMode === 'dark' ? 'light-content' : 'dark-content'} />
       <Header />
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SectionHeader eyebrow="LABORATÓRIO VIRTUAL" title="Escolha seu desafio" description="Explore como diferentes medidas afetam a propagação de doenças." />
@@ -109,8 +113,8 @@ export default function MissionScreen({ navigation }: Props) {
           {missions.map(item => {
             const selected = selectedMission === item.id;
             return <Pressable key={item.id} accessibilityRole="button" accessibilityState={{selected}} onPress={() => setSelectedMission(item.id)}>
-              <AppCard selected={selected} style={styles.mission}>
-                <View style={styles.row}><AppText variant="caption" style={{color:item.color, fontWeight:'700'}}>{item.badge}</AppText><AppText variant="caption" tone={selected?'accent':'muted'}>{selected?'✓ Selecionada':'○'}</AppText></View>
+              <AppCard selected={selected} style={[styles.mission, { borderColor: selected ? colors.accent : colors.controlBorder }]}>
+                <View style={styles.row}><AppText variant="caption" tone={item.tone} style={styles.badge}>{item.badge}</AppText><AppText variant="caption" tone={selected?'accent':'muted'}>{selected?'✓ Selecionada':'○'}</AppText></View>
                 <AppText variant="button">{item.title}</AppText>
                 <AppText variant="caption" tone="muted">{item.description}</AppText>
               </AppCard>
@@ -131,7 +135,7 @@ export default function MissionScreen({ navigation }: Props) {
           {cities.map(item => {
             const selected = selectedCity === item.id;
             return <Pressable key={item.id} style={styles.city} accessibilityRole="button" accessibilityState={{selected}} onPress={() => setSelectedCity(item.id)}>
-              <AppCard selected={selected} style={styles.cityCard}>
+              <AppCard selected={selected} style={[styles.cityCard, { borderColor: selected ? colors.accent : colors.controlBorder }]}>
                 <AppText variant="button" tone={selected?'accent':'text'}>{item.name}{selected?' ✓':''}</AppText>
                 <AppText variant="caption" tone="muted">{item.population}</AppText>
               </AppCard>
@@ -147,14 +151,17 @@ export default function MissionScreen({ navigation }: Props) {
     </View>
   );
 }
-const styles = StyleSheet.create({
+function createStyles({ colors, spacing, radius, layout }: Theme) {
+  return StyleSheet.create({
   container:{flex:1,backgroundColor:colors.background}, scroll:{flex:1},
   content:{padding:layout.screenPadding,gap:spacing.lg,paddingBottom:spacing.xl},
+  badge:{fontWeight:'700'},
   stack:{gap:spacing.sm}, mission:{gap:spacing.xs},
   row:{flexDirection:'row',justifyContent:'space-between',alignItems:'center',gap:spacing.sm},
   hypothesis:{backgroundColor:colors.selectedSurface,borderRadius:radius.md,padding:spacing.md,gap:spacing.sm},
-  input:{color:colors.text,fontSize:14,minHeight:96,textAlignVertical:'top',borderWidth:1,borderColor:colors.border,borderRadius:radius.sm,padding:spacing.sm},
+  input:{backgroundColor:colors.surface,color:colors.text,fontSize:14,minHeight:96,textAlignVertical:'top',borderWidth:1,borderColor:colors.controlBorder,borderRadius:radius.sm,padding:spacing.sm},
   grid:{flexDirection:'row',flexWrap:'wrap',justifyContent:'space-between',rowGap:spacing.sm},
   city:{width:'48.5%'},cityCard:{minHeight:76,padding:spacing.md,justifyContent:'center',gap:spacing.xs},
-  footer:{backgroundColor:colors.background,borderTopWidth:1,borderTopColor:colors.border,paddingHorizontal:layout.screenPadding,paddingTop:spacing.sm,paddingBottom:spacing.sm,gap:spacing.sm},
+  footer:{backgroundColor:colors.surface,borderTopWidth:1,borderTopColor:colors.border,paddingHorizontal:layout.screenPadding,paddingTop:spacing.sm,paddingBottom:spacing.sm,gap:spacing.sm},
 });
+}
