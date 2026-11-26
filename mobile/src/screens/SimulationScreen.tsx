@@ -3,15 +3,16 @@ import { View, Text, ScrollView, StyleSheet, TouchableOpacity, TextInput } from 
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import SettingsPanel from "../components/SettingsPanel";
 import SpatialSimulation from "../components/SpatialSimulation";
+import SimulationResults from "../components/SimulationResults";
 import SimulationCharts from "../components/SimulationCharts";
 import { SafeAreaView } from "react-native-safe-area-context";
 import SegmentedControl from "../components/ui/SegmentedControl";
 import AppButton from "../components/ui/AppButton";
-import { colors, spacing, typography, epidemiologyColors } from "../theme/theme";
+import { colors, spacing, typography } from "../theme/theme";
 import Header from "../components/Header";
 import type { RootStackParamList } from "../navigation/types";
 import { CITY_POPULATION, runSimulationLocal } from "../simulation/simulationEngine";
-import type { City, ScenarioResult, SimulationResult } from "../simulation/simulationEngine";
+import type { City, SimulationResult } from "../simulation/simulationEngine";
 import { DISEASE_PROFILES } from "../simulation/diseaseProfiles";
 import type { DiseaseId } from "../simulation/diseaseProfiles";
 
@@ -83,15 +84,7 @@ export default function SimulationScreen({ navigation, route }: Props) {
     } finally { busy.current = false; if (mounted.current) setRunning(false); }
   }
   function choices(label:string,value:number,values:number[],set:(n:number)=>void){return <View><Text style={styles.description}>{label}: {value}</Text><View style={[styles.choices,{flexWrap:"wrap"}]}>{values.map(n=><TouchableOpacity key={n} disabled={running} onPress={()=>{set(n);setResult(null);}} style={[styles.choice,n===value&&styles.selected]}><Text style={styles.buttonText}>{n}</Text></TouchableOpacity>)}</View></View>;}
-  function scenario(title: string, data?: ScenarioResult) {
-    const last = data ? data.healthy.length - 1 : 0;
-    return <View style={styles.card}><Text style={styles.scenarioTitle}>{title}</Text>{data ? <>
-      <Text style={styles.description}>População: {fmt(data.total_population)}</Text>
-      {([ ["Suscetíveis", data.healthy[last], epidemiologyColors.susceptible], ["Expostos", data.exposed[last], epidemiologyColors.exposed], ["Infectados", data.sick[last], epidemiologyColors.infected], ["Mortos", data.dead[last], epidemiologyColors.deceased], ["Imunes", data.immune[last], epidemiologyColors.recovered] ] as const).map(([label, value, color]) => <View key={label} style={styles.stat}><Text style={styles.description}>{label}</Text><Text style={{color, fontWeight:"700"}}>{fmt(value)}</Text></View>)}
-      <Text style={styles.description}>Resultados da última semana.</Text>
-    </> : <Text style={styles.description}>Aguardando simulação.</Text>}</View>;
-  }
-const labelA = masks ? "Máscaras" : "Sem intervenção";
+  const labelA = masks ? "Máscaras" : "Sem intervenção";
   const labelB = masks ? "Distanciamento" : missionId === "sem-intervencao" || (free && !freeVaccine && !freeMask && !freeDistance && !freeLockdown) ? "Sem intervenção (repetição)" : "Com intervenção";
   return <View style={styles.container}>
     <Header subtitle="LABORATÓRIO VIRTUAL" />
@@ -108,11 +101,7 @@ const labelA = masks ? "Máscaras" : "Sem intervenção";
         {result ? <SpatialSimulation result={result} labelA={labelA} labelB={labelB}/> : <View style={styles.card}><Text style={styles.scenarioTitle}>Experimento {running?"em andamento":"pronto para configurar"}</Text><Text style={styles.description}>A — {labelA}</Text><Text style={styles.description}>B — {labelB}</Text><Text style={styles.description}>Execute a simulação para visualizar a propagação espacial.</Text></View>}
       </>}
       {tab === "charts" && (result ? <SimulationCharts result={result} labelA={labelA} labelB={labelB}/> : <View style={styles.card}><Text style={styles.description}>Execute a simulação para visualizar os gráficos.</Text></View>)}
-      {tab === "results" && <>
-        {result && <View style={styles.card}><Text style={styles.cardLabel}>TEMPO TOTAL DO MOTOR</Text><Text style={styles.cardValue}>{(result.elapsedMs/1000).toFixed(3)} s</Text><Text style={styles.description}>Semente: {result.seed}. Execução local, sem HTTP. Não inclui renderização final.</Text></View>}
-        {scenario(`CENÁRIO A — ${labelA}`,result?.scenario1)}
-        {scenario(`CENÁRIO B — ${labelB}`,result?.scenario2)}
-      </>}
+      {tab === "results" && (result ? <SimulationResults result={result} labelA={labelA} labelB={labelB}/> : <View style={styles.card}><Text style={styles.description}>Execute a simulação para visualizar os resultados.</Text></View>)}
     </ScrollView>
     <SettingsPanel visible={settingsOpen} onClose={()=>setSettingsOpen(false)} basic={<>
     <View style={styles.card}><Text style={styles.cardLabel}>PERFIL EPIDEMIOLÓGICO</Text>{(Object.keys(DISEASE_PROFILES) as DiseaseId[]).map(id => <TouchableOpacity key={id} disabled={running} onPress={() => {setDisease(id);setResult(null);}} style={[styles.choice,disease===id && styles.selected]}><Text style={styles.buttonText}>{DISEASE_PROFILES[id].name}</Text></TouchableOpacity>)}<Text style={styles.description}>Parâmetros educacionais ilustrativos, não calibrados.</Text></View>
